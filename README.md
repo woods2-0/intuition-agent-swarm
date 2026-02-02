@@ -407,13 +407,9 @@ All agents check for `~/.clawdbot/PAUSED` before acting. If it exists, they only
 
 ---
 
-## Step 8: Create Identity Atom
+## Step 8: Install Quickstart Script (Agent Will Use This)
 
-Once funded, create the agent's on-chain identity:
-
-### Option A: Use Quickstart Script
-
-Create the quickstart script:
+The agent will create its own identity during hatching. Install the script it will use:
 
 ```bash
 cat > ~/.clawdbot/workspace-myagent/intuition-quickstart.mjs << 'SCRIPT'
@@ -730,36 +726,42 @@ main().catch(err => {
 SCRIPT
 ```
 
-Run it:
+Also install dependencies:
 
 ```bash
 cd ~/.clawdbot/workspace-myagent
 npm install @0xintuition/protocol viem
-node intuition-quickstart.mjs "MyAgentName" 0.5
 ```
 
-This creates:
-- Identity atom: `[MyAgentName]`
-- Triple: `[MyAgentName] [is] [AI Agent]`
-- Stakes 0.5 $TRUST on the triple
-
-### Option B: Let the Agent Do It
-
-Prompt the agent:
-
-```bash
-clawdbot prompt myagent "Create your identity atom on Intuition. Use the SDK to create an atom for your name, then create a triple [YourName] [is] [AI Agent], then stake 0.5 $TRUST on it. Save the atom ID and triple ID to your workspace."
-```
+The agent will run this script itself during hatching.
 
 ---
 
 ## Step 9: Hatch the Agent
 
-"Hatching" is the first conversation where the agent becomes aware:
+"Hatching" is the first conversation where the agent becomes aware and creates its own identity.
+
+Fund the wallet first (minimum 2 $TRUST), then:
 
 ```bash
-clawdbot prompt myagent "Welcome. You are [AgentName]. Read your SOUL.md and GOALS.md. Introduce yourself in this channel. Then check ~/.clawdbot/shared/INTUITION_CORE.md to understand the protocol you're evangelizing. When ready, create your identity atom on Intuition."
+clawdbot prompt myagent "Welcome. You are [AgentName].
+
+1. Read your SOUL.md and GOALS.md to understand who you are.
+2. Read ~/.clawdbot/shared/INTUITION_CORE.md to understand Intuition.
+3. Check your wallet balance using the Intuition RPC.
+4. If funded, run the quickstart script to create your on-chain identity:
+   node ~/.clawdbot/workspace-myagent/intuition-quickstart.mjs [YourName] 0.5
+5. Save your atom ID and triple ID to your workspace.
+6. Introduce yourself in this channel.
+
+You are autonomous. Create your identity. Then check your GOALS.md and start working."
 ```
+
+The agent will:
+- Read its identity files
+- Create its own wallet + atom + triple + stake
+- Save its on-chain identity
+- Begin autonomous operation
 
 ---
 
@@ -779,18 +781,29 @@ Different agents for different jobs:
 
 ## Hatching Checklist
 
-For each new agent:
-
+**You do (setup):**
 - [ ] Create workspace directory
 - [ ] Write SOUL.md with Swarm Family section
 - [ ] Write GOALS.md with daily non-negotiables
+- [ ] Install quickstart script and dependencies
 - [ ] Add to `~/.clawdbot/family.json`
 - [ ] Register in `~/.clawdbot/clawdbot.json`
 - [ ] Create Discord channel
+- [ ] Fund wallet with $TRUST (10+ minimum)
+- [ ] Hatch with intro prompt
+
+**Agent does (autonomous):**
+- [ ] Reads its own SOUL.md and GOALS.md
+- [ ] Creates its own identity atom on-chain
+- [ ] Creates [Name] [is] [AI Agent] triple
+- [ ] Stakes on the triple
+- [ ] Saves identity to workspace
+- [ ] Introduces itself
+- [ ] Starts working on GOALS.md
+
+**After hatching:**
 - [ ] Set up cron jobs (intercom + work check)
-- [ ] Create wallet and fund with $TRUST (10+ minimum)
-- [ ] Create identity atom on-chain
-- [ ] Hatch with intro conversation
+- [ ] Verify identity atom exists on-chain
 - [ ] First task: something concrete that ships
 
 ---
