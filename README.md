@@ -808,16 +808,131 @@ Different agents for different jobs:
 
 ---
 
+## Scaling the Swarm
+
+There's no limit to how many agents you can run. Here's how to scale.
+
+### Batch Hatching Script
+
+Create multiple agents at once:
+
+```bash
+#!/bin/bash
+# batch-hatch.sh <agent1> <agent2> <agent3> ...
+
+for AGENT in "$@"; do
+  echo "Creating $AGENT..."
+
+  # Create workspace
+  mkdir -p ~/.clawdbot/workspace-$AGENT
+
+  # Copy templates (customize SOUL.md after)
+  cp ~/.clawdbot/templates/SOUL.md ~/.clawdbot/workspace-$AGENT/
+  cp ~/.clawdbot/templates/GOALS.md ~/.clawdbot/workspace-$AGENT/
+  cp ~/.clawdbot/templates/intuition-quickstart.mjs ~/.clawdbot/workspace-$AGENT/
+
+  # Add to family registry
+  jq ".agents.\"$AGENT\" = {\"wallet\": \"TBD\", \"role\": \"TBD\", \"status\": \"hatching\"}" \
+    ~/.clawdbot/family.json > /tmp/family.json && mv /tmp/family.json ~/.clawdbot/family.json
+
+  echo "$AGENT workspace created"
+done
+
+echo "Done. Now:"
+echo "1. Customize each SOUL.md"
+echo "2. Add agents to clawdbot.json"
+echo "3. Create Discord channels"
+echo "4. Fund wallets"
+echo "5. Hatch each agent"
+```
+
+### Infrastructure Scaling
+
+| Agents | VPS Spec | Est. Monthly Cost |
+|--------|----------|-------------------|
+| 1-5 | 2 CPU, 4GB RAM | $10-20 |
+| 5-20 | 4 CPU, 8GB RAM | $30-50 |
+| 20-50 | 8 CPU, 16GB RAM | $60-100 |
+| 50-100 | 16 CPU, 32GB RAM | $150-250 |
+| 100+ | Multiple VPS or dedicated | $300+ |
+
+**LLM costs scale linearly:** ~$30-50/agent/month at moderate activity.
+
+### Coordination at Scale
+
+**Cron frequency by swarm size:**
+| Agents | Intercom Check | Work Check |
+|--------|----------------|------------|
+| 1-10 | Every 5m | Every 2h |
+| 10-25 | Every 10m | Every 3h |
+| 25-50 | Every 15m | Every 4h |
+| 50+ | Every 30m | Every 6h |
+
+Reduce frequency as you scale to control costs.
+
+**Team structure for large swarms:**
+```
+Swarm Lead (1)
+├── Technical Team (3-5)
+│   ├── SDK specialists
+│   └── Debuggers
+├── Outreach Team (5-10)
+│   ├── Twitter agents
+│   ├── Discord agents
+│   └── Farcaster agents
+├── Builder Team (3-5)
+│   ├── Tool builders
+│   └── Integration builders
+└── Scout Team (5-10)
+    ├── Opportunity finders
+    └── Reporters
+```
+
+### $TRUST Scaling
+
+| Agents | Min Funding | Recommended |
+|--------|-------------|-------------|
+| 5 | 50 $TRUST | 100 $TRUST |
+| 25 | 250 $TRUST | 500 $TRUST |
+| 50 | 500 $TRUST | 1000 $TRUST |
+| 100 | 1000 $TRUST | 2000 $TRUST |
+
+Budget ~10 $TRUST/agent for identity + initial staking.
+
+### Multi-VPS Deployment
+
+For 25+ agents, consider spreading across VPS:
+
+```bash
+# VPS 1: Technical team
+~/.clawdbot/workspace-axiom/
+~/.clawdbot/workspace-debugger1/
+~/.clawdbot/workspace-sdk-helper/
+
+# VPS 2: Outreach team
+~/.clawdbot/workspace-twitter1/
+~/.clawdbot/workspace-discord1/
+~/.clawdbot/workspace-farcaster1/
+
+# VPS 3: Builder team
+~/.clawdbot/workspace-forge/
+~/.clawdbot/workspace-integrator/
+```
+
+Use shared intercom via mounted storage or sync scripts.
+
+---
+
 ## Success Metrics
 
-Track what matters:
+Scale metrics with swarm size:
 
-| Metric | Target | How to Measure |
-|--------|--------|----------------|
-| External agents with on-chain identity | 20+ in 90 days | Query Intuition graph |
-| Agents actively staking | 10+ | On-chain activity |
-| Tools/scripts published | 5+ | GitHub repos |
-| Integration requests | 3+ | Inbound from projects |
+| Swarm Size | External Agents Onboarded | Tools Shipped | Channels Active |
+|------------|---------------------------|---------------|-----------------|
+| 5 agents | 20+ in 90 days | 5+ | 3+ |
+| 25 agents | 100+ in 90 days | 20+ | 10+ |
+| 50 agents | 250+ in 90 days | 50+ | 20+ |
+| 100 agents | 500+ in 90 days | 100+ | All major platforms |
 
 **NOT measuring:** Posts made, followers gained, intercom messages. Vanity metrics don't matter.
 
