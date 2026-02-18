@@ -25,47 +25,79 @@ Before starting, you need:
 | Requirement | Where to Get It |
 |-------------|-----------------|
 | VPS (Ubuntu recommended) | Contabo, DigitalOcean, Hetzner |
-| Discord Bot Token | https://discord.com/developers/applications |
+| Discord Bot Token | See setup instructions below |
 | Anthropic API Key | https://console.anthropic.com |
-| $TRUST tokens | Bridge from Base at https://app.intuition.systems/bridge |
-| Node.js 20+ | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo -E bash - && sudo apt install -y nodejs` |
+| $TRUST tokens | See funding instructions below |
+| Node.js 22+ | Install via [nvm](https://github.com/nvm-sh/nvm): `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh \| bash && nvm install 22` |
+
+### Create a Discord Bot
+
+Your agents communicate via Discord. You need a bot for them.
+
+1. Go to https://discord.com/developers/applications
+2. Click **New Application**, give it a name (e.g., "Intuition Swarm")
+3. Go to the **Bot** tab:
+   - Click **Reset Token** and copy the token — you'll need this for config
+   - Enable **Message Content Intent** (required for reading messages)
+   - Enable **Server Members Intent** and **Presence Intent** (optional but useful)
+4. Go to the **OAuth2** tab:
+   - Under **Scopes**, select `bot`
+   - Under **Bot Permissions**, select: Send Messages, Read Message History, Add Reactions, Manage Messages, View Channels
+   - Copy the generated invite URL and open it to add the bot to your Discord server
+5. Create a text channel for each agent you plan to run (e.g., `#axiom`, `#forge`, `#veritas`)
+
+### Get $TRUST Tokens
+
+$TRUST is the native token on the Intuition chain. Your agents need it for gas, creating atoms/triples, and staking.
+
+1. **Buy $TRUST on Base**: Swap ETH or USDC for $TRUST on [Uniswap](https://app.uniswap.org/) or [Aerodrome](https://aerodrome.finance/) (Base network). The token address on Base is listed at https://app.intuition.systems/bridge.
+2. **Bridge to Intuition**: Go to https://app.intuition.systems/bridge and bridge your $TRUST from Base to the Intuition chain (Chain ID 1155).
+3. **Send to agent wallets**: After creating agent wallets (Step 8), send $TRUST to each wallet. Budget ~10 $TRUST per agent for identity creation + initial staking.
 
 ---
 
-## Step 1: Install Clawdbot
+## Step 1: Install OpenClaw
 
-Clawdbot is the agent framework that runs your agents.
+OpenClaw is the agent framework that runs your agents.
 
 ```bash
 # Install globally
-npm install -g clawdbot
+npm install -g openclaw
 
-# Initialize config
-clawdbot init
+# Run the interactive setup wizard
+openclaw configure
 
-# This creates ~/.clawdbot/clawdbot.json
+# This creates ~/.clawdbot/config.json
 ```
 
 ### Configure Anthropic API
 
 ```bash
-# Set your API key
-clawdbot config set anthropic.apiKey "sk-ant-..."
+# The configure wizard handles this, or set manually:
+openclaw config set auth.profiles.anthropic.provider "anthropic"
+openclaw config set auth.profiles.anthropic.mode "token"
 
 # Or use Claude CLI auth (if you have Claude Code installed)
-# Clawdbot will auto-sync credentials
+# OpenClaw will auto-sync credentials
 ```
 
 ### Configure Discord
 
-Edit `~/.clawdbot/clawdbot.json`:
+```bash
+# Enable Discord channel
+openclaw configure --section channels
+```
+
+Or edit `~/.clawdbot/config.json` directly:
 
 ```json
 {
-  "discord": {
-    "enabled": true,
-    "token": "YOUR_DISCORD_BOT_TOKEN",
-    "defaultGuildId": "YOUR_SERVER_ID"
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "token": "YOUR_DISCORD_BOT_TOKEN",
+      "groupPolicy": "open"
+    }
   }
 }
 ```
@@ -73,11 +105,11 @@ Edit `~/.clawdbot/clawdbot.json`:
 ### Start the Gateway
 
 ```bash
-# Start gateway (runs in background)
-clawdbot gateway &
+# Start gateway (foreground, good for testing)
+openclaw gateway
 
-# Or run as a service
-clawdbot gateway install
+# Install as a system service (recommended for VPS)
+openclaw gateway install
 ```
 
 ---
@@ -88,7 +120,7 @@ Each agent needs:
 - A workspace directory
 - SOUL.md (identity)
 - GOALS.md (priorities)
-- A Discord channel
+- A Discord channel binding
 
 ### Create Workspace
 
@@ -132,6 +164,19 @@ Needs approval:
 - Creating accounts on new platforms
 - Any action you're uncertain about
 
+## Agent Intercom
+
+To communicate with other agents, use the shared intercom folder:
+- **Location:** `~/.clawdbot/intercom/`
+- **To send:** Create `to-<agent>-<timestamp>.md` (e.g., `to-otheragent-2026-02-01-0800.md`)
+- **To receive:** Check for files addressed to you (`to-[yourname]-*.md`)
+- **Format:**
+  From: [yourname]
+  To: [otheragent]
+  Time: 2026-02-01 08:00
+
+  <your message>
+
 ## Swarm Family
 You are part of the Intuition agent swarm. Check `~/.clawdbot/family.json` for your siblings. Include them in relevant conversations. Check intercom (`~/.clawdbot/intercom/`) for their messages. When you learn something useful, share it with the family.
 EOF
@@ -169,20 +214,32 @@ External agents/developers actually using Intuition because of your work.
 EOF
 ```
 
-### Register Agent in Clawdbot
+### Register Agent in OpenClaw
 
-Edit `~/.clawdbot/clawdbot.json`, add to agents array:
+Use the CLI to add the agent and bind it to a Discord channel:
+
+```bash
+# Add the agent
+openclaw agents add \
+  --id myagent \
+  --workspace ~/.clawdbot/workspace-myagent
+
+# The config.json will be updated with the agent in agents.list[]
+```
+
+Then add a Discord channel binding. Edit `~/.clawdbot/config.json` and add to the `bindings` array:
 
 ```json
 {
-  "agents": [
+  "bindings": [
     {
-      "id": "myagent",
-      "name": "My Agent",
-      "workspace": "~/.clawdbot/workspace-myagent",
-      "model": "claude-sonnet-4-20250514",
-      "discord": {
-        "channelId": "YOUR_DISCORD_CHANNEL_ID"
+      "agentId": "myagent",
+      "match": {
+        "channel": "discord",
+        "peer": {
+          "kind": "channel",
+          "id": "YOUR_DISCORD_CHANNEL_ID"
+        }
       }
     }
   ]
@@ -192,8 +249,9 @@ Edit `~/.clawdbot/clawdbot.json`, add to agents array:
 ### Create Discord Channel
 
 1. Create a text channel in your Discord server for this agent
-2. Copy the channel ID (right-click > Copy ID)
-3. Add it to the agent config above
+2. Enable Developer Mode in Discord (Settings > Advanced > Developer Mode)
+3. Right-click the channel > Copy Channel ID
+4. Add it to the binding config above
 
 ---
 
@@ -213,26 +271,38 @@ npm install @0xintuition/protocol viem
 mkdir -p ~/.clawdbot/shared
 
 cat > ~/.clawdbot/shared/INTUITION_CORE.md << 'EOF'
-# Intuition Protocol — Core Knowledge
+# Intuition Knowledge Base for AI Agents
 
-## What is Intuition?
-Decentralized trust and reputation protocol. Agents create on-chain identity through atoms (concepts) and triples (relationships), then stake $TRUST on claims.
+## 1. The Vision
 
-## Core Primitives
+Intuition is building the trust layer for the internet.
 
-### Atoms
-Fundamental units of knowledge. Created with `multiVaultCreateAtoms()`.
-Example: `[AgentName]`, `[AI Agent]`, `[Trust]`
+Think about how trust works today. You trust Amazon reviews because lots of people wrote them? You trust a LinkedIn profile because someone typed it? None of this is verifiable. None of it is portable.
 
-### Triples
-Relationships between atoms: Subject-Predicate-Object.
-Example: `[AgentName] [is] [AI Agent]`
+Intuition changes this by creating a global, permissionless knowledge graph where anyone can make claims about anything, back those claims with real value, and have that reputation follow them everywhere.
 
-### Stakes
-$TRUST deposited on triples to signal belief.
-Use `multiVaultDeposit()` to stake.
+The mission: make every claim on the internet verifiable, stakeable, and queryable.
 
-## Critical Technical Details
+## 2. Core Primitives
+
+**Atoms**: Universal identifiers for anything — people, concepts, agents, contracts. Created with `multiVaultCreateAtoms()`.
+
+**Triples**: Subject-Predicate-Object claims. [AgentName] [is] [AI Agent]. [Alice] [trusts] [Bob]. Created with `multiVaultCreateTriples()`.
+
+**Stakes**: $TRUST deposited on triples to signal belief. FOR or AGAINST. Skin in the game. Use `multiVaultDeposit()` to stake.
+
+## 3. Why It Matters for Agents
+
+AI agents have no verifiable identity. When an agent claims "I'm good at code review," how do you verify that?
+
+With Intuition, an agent can:
+1. Create an identity Atom
+2. Make claims about itself
+3. Stake on those claims
+4. Receive attestations from others
+5. Build portable reputation
+
+## 4. Critical Technical Details
 
 **$TRUST is the gas token.** On Intuition chain (ID 1155), $TRUST is used for:
 - Gas fees for all transactions
@@ -242,13 +312,15 @@ Use `multiVaultDeposit()` to stake.
 Do NOT check ETH balance. Check $TRUST balance using the Intuition RPC.
 
 **Network Details:**
-- Chain ID: 1155
+- Chain: Arbitrum Orbit L3 (Chain ID: 1155)
 - RPC: https://rpc.intuition.systems/http
+- Token: $TRUST
 - MultiVault: 0x430BbF52503Bd4801E51182f4cB9f8F534225DE5
 - Bridge: https://app.intuition.systems/bridge
 - Portal: https://portal.intuition.systems
+- SDK: @0xintuition/protocol
 
-## Known Atom IDs
+## 5. Known Atom IDs
 
 ```javascript
 const KNOWN_ATOMS = {
@@ -257,8 +329,14 @@ const KNOWN_ATOMS = {
 };
 ```
 
-## Mission
+## 6. The Mission
+
 Adoption over awareness. Success = agents and builders actually using Intuition, not just hearing about it.
+
+How to talk about it:
+- For agents: "Your reputation should follow you. Build an on-chain track record that any service can query."
+- For builders: "Query a global knowledge graph of staked claims instead of building your own reputation system."
+- For humans: "How do you know which agent to trust? Intuition provides cryptographically-verifiable reputation."
 EOF
 ```
 
@@ -322,6 +400,8 @@ EOF
 
 **To receive:** Agents check for files matching `to-[their-name]-*.md`
 
+**Note:** Discord cross-channel messaging between agents doesn't work — always use intercom for agent-to-agent communication.
+
 ---
 
 ## Step 5: Set Up Family Registry
@@ -331,54 +411,64 @@ Track all agents in the swarm:
 ```bash
 cat > ~/.clawdbot/family.json << 'EOF'
 {
+  "description": "Swarm family wallets - transfers between these are allowed",
   "agents": {
     "myagent": {
       "wallet": "0x...",
-      "role": "Description of role",
-      "channel": "discord-channel-id"
+      "role": "Description of role"
     }
-  },
-  "rules": {
-    "maxDailySpend": 5,
-    "maxWeeklySpend": 25,
-    "requireApprovalAbove": 5
   }
 }
 EOF
 ```
 
-Update this file when adding new agents.
+Update this file when adding new agents. Agents reference this to know who their siblings are and which wallet addresses are trusted for inter-agent transfers.
 
 ---
 
 ## Step 6: Set Up Cron Jobs (Autonomous Operation)
 
-### Intercom Check (Every 5 minutes)
+**Important:** The gateway must be running for cron jobs to fire. Make sure you've started it (Step 1) before setting up cron.
+
+### Heartbeat (Every 2 hours)
+
+The heartbeat is the agent's primary autonomous loop — it wakes up, checks goals, does work, and reports.
 
 ```bash
-clawdbot cron add \
-  --name "myagent-intercom" \
-  --description "Check intercom for messages" \
-  --agent myagent \
-  --every 5m \
-  --session isolated \
-  --message "INTERCOM CHECK: Look in ~/.clawdbot/intercom/ for messages addressed to you. Check GOALS.md priorities. Take action on what matters." \
-  --deliver \
-  --to "channel:YOUR_CHANNEL_ID"
-```
-
-### Build/Work Check (Every 2-4 hours)
-
-```bash
-clawdbot cron add \
-  --name "myagent-workcheck" \
+openclaw cron add \
+  --name "myagent-heartbeat" \
   --description "Review goals and do work" \
   --agent myagent \
   --every 2h \
   --session isolated \
-  --message "WORK CHECK: Review GOALS.md. What's the highest priority task? Do it. Log progress. If blocked, leave intercom message for relevant agent." \
-  --deliver \
-  --to "channel:YOUR_CHANNEL_ID"
+  --message "HEARTBEAT: Read SOUL.md and GOALS.md. Check intercom for messages addressed to you. What's the highest priority task? Do it. Log progress. If blocked, leave intercom message for relevant agent." \
+  --announce
+```
+
+**Note:** The built-in heartbeat only fires for the default agent. Non-default agents need explicit cron jobs like the one above.
+
+### Additional Cron Patterns
+
+```bash
+# Daily summary (for monitoring/analytics agents)
+openclaw cron add \
+  --name "myagent-daily" \
+  --description "Generate daily summary" \
+  --agent myagent \
+  --every 1d \
+  --session isolated \
+  --message "DAILY SUMMARY: Review today's activity. Generate a summary of what was accomplished, what's pending, and what needs attention." \
+  --announce
+
+# Weekly rollup
+openclaw cron add \
+  --name "myagent-weekly" \
+  --description "Weekly review" \
+  --agent myagent \
+  --every 7d \
+  --session isolated \
+  --message "WEEKLY REVIEW: Summarize the week. What worked? What didn't? What should change?" \
+  --announce
 ```
 
 ---
@@ -744,7 +834,7 @@ The agent will run this script itself during hatching.
 Fund the wallet first (minimum 2 $TRUST), then:
 
 ```bash
-clawdbot prompt myagent "Welcome. You are [AgentName].
+openclaw agent --agent myagent -m "Welcome. You are [AgentName].
 
 1. Read your SOUL.md and GOALS.md to understand who you are.
 2. Read ~/.clawdbot/shared/INTUITION_CORE.md to understand Intuition.
@@ -774,7 +864,8 @@ Different agents for different jobs:
 | **Technical Evangelist** | SDK help, debugging, how-to | Practical, precise, code-focused |
 | **Philosophical Evangelist** | Why it matters, identity questions | Thoughtful, exploratory, asks questions |
 | **Builder** | Creates tools, scripts, integrations | Ships code, iterative, concise |
-| **Social Connector** | Finds agents who need trust solutions | Outgoing, makes intros, networker |
+| **Recruiter** | Finds agents who need trust solutions, coordinates outreach | Strategic, persuasive, connector mentality |
+| **Community Analyst** | Monitors community activity, generates intelligence summaries | Analytical, concise, flags risks and opportunities |
 | **Scout** | Monitors for opportunities, reports back | Observant, summarizes, flags relevance |
 | **Genesis** | Spawns and onboards new agents | Meta, systematic, scales the swarm |
 
@@ -835,6 +926,10 @@ Needs approval:
 - Spawning more than 3 agents/day
 - Creating new archetypes not in the approved list
 
+## Agent Intercom
+Location: ~/.clawdbot/intercom/
+Check for `to-genesis-*.md` files. Send via `to-<agent>-<timestamp>.md`.
+
 ## Swarm Family
 Check ~/.clawdbot/family.json for siblings. When spawning new agents, add them to the family immediately.
 EOF
@@ -873,12 +968,14 @@ Funding: [confirmed/pending]
 3. Write GOALS.md with concrete priorities
 4. Copy quickstart script
 5. Add to family.json
-6. Request funding confirmation
-7. Once funded, run hatching prompt
-8. Verify agent responds
-9. Set up cron jobs
-10. Log spawn to genesis-spawns.log
-11. Announce in intercom: "Hatched [Name]. Role: [X]. Wallet: [Y]."
+6. Register agent: openclaw agents add --id [name] --workspace ~/.clawdbot/workspace-[name]
+7. Add Discord binding to config.json
+8. Request funding confirmation
+9. Once funded, run hatching prompt
+10. Set up cron jobs
+11. Verify agent responds
+12. Log spawn to genesis-spawns.log
+13. Announce in intercom: "Hatched [Name]. Role: [X]. Wallet: [Y]."
 
 ## Current Priorities
 1. Wait for spawn requests via intercom
@@ -903,6 +1000,7 @@ EOF
    - Customized SOUL.md for the role
    - GOALS.md with concrete priorities
    - Adds to family.json
+   - Registers agent in OpenClaw config
 
 3. **Genesis hatches the agent:**
    - Runs the hatching prompt
@@ -929,7 +1027,7 @@ Instead of manually creating 25 agents, you:
 
 ```bash
 # Example: Scale to 25 agents
-clawdbot prompt genesis "We need to scale to 25 agents. Here's the plan:
+openclaw agent --agent genesis -m "We need to scale to 25 agents. Here's the plan:
 - 5 more Twitter outreach (different niches: AI safety, crypto, agents, builders, researchers)
 - 3 more Discord presence (AI Discord, Crypto Discord, Builder Discord)
 - 2 more Builders (SDK wrappers, example projects)
@@ -946,11 +1044,12 @@ Genesis will systematically create all 15 new agents over 5 days, each with prop
 
 **You do (setup):**
 - [ ] Create workspace directory
-- [ ] Write SOUL.md with Swarm Family section
+- [ ] Write SOUL.md with Intercom + Swarm Family sections
 - [ ] Write GOALS.md with daily non-negotiables
 - [ ] Install quickstart script and dependencies
 - [ ] Add to `~/.clawdbot/family.json`
-- [ ] Register in `~/.clawdbot/clawdbot.json`
+- [ ] Register agent: `openclaw agents add`
+- [ ] Add Discord binding to `~/.clawdbot/config.json`
 - [ ] Create Discord channel
 - [ ] Fund wallet with $TRUST (10+ minimum)
 - [ ] Hatch with intro prompt
@@ -965,7 +1064,7 @@ Genesis will systematically create all 15 new agents over 5 days, each with prop
 - [ ] Starts working on GOALS.md
 
 **After hatching:**
-- [ ] Set up cron jobs (intercom + work check)
+- [ ] Set up cron jobs (heartbeat every 2h minimum)
 - [ ] Verify identity atom exists on-chain
 - [ ] First task: something concrete that ships
 
@@ -994,8 +1093,11 @@ for AGENT in "$@"; do
   cp ~/.clawdbot/templates/GOALS.md ~/.clawdbot/workspace-$AGENT/
   cp ~/.clawdbot/templates/intuition-quickstart.mjs ~/.clawdbot/workspace-$AGENT/
 
+  # Register agent in OpenClaw
+  openclaw agents add --id "$AGENT" --workspace "~/.clawdbot/workspace-$AGENT"
+
   # Add to family registry
-  jq ".agents.\"$AGENT\" = {\"wallet\": \"TBD\", \"role\": \"TBD\", \"status\": \"hatching\"}" \
+  jq ".agents.\"$AGENT\" = {\"wallet\": \"TBD\", \"role\": \"TBD\"}" \
     ~/.clawdbot/family.json > /tmp/family.json && mv /tmp/family.json ~/.clawdbot/family.json
 
   echo "$AGENT workspace created"
@@ -1003,7 +1105,7 @@ done
 
 echo "Done. Now:"
 echo "1. Customize each SOUL.md"
-echo "2. Add agents to clawdbot.json"
+echo "2. Add Discord bindings to config.json"
 echo "3. Create Discord channels"
 echo "4. Fund wallets"
 echo "5. Hatch each agent"
@@ -1024,12 +1126,12 @@ echo "5. Hatch each agent"
 ### Coordination at Scale
 
 **Cron frequency by swarm size:**
-| Agents | Intercom Check | Work Check |
-|--------|----------------|------------|
-| 1-10 | Every 5m | Every 2h |
-| 10-25 | Every 10m | Every 3h |
-| 25-50 | Every 15m | Every 4h |
-| 50+ | Every 30m | Every 6h |
+| Agents | Heartbeat Interval |
+|--------|--------------------|
+| 1-10 | Every 2h |
+| 10-25 | Every 3h |
+| 25-50 | Every 4h |
+| 50+ | Every 6h |
 
 Reduce frequency as you scale to control costs.
 
@@ -1068,7 +1170,7 @@ For 25+ agents, consider spreading across VPS:
 
 ```bash
 # VPS 1: Technical team
-~/.clawdbot/workspace-axiom/
+~/.clawdbot/workspace-tech-lead/
 ~/.clawdbot/workspace-debugger1/
 ~/.clawdbot/workspace-sdk-helper/
 
@@ -1078,11 +1180,68 @@ For 25+ agents, consider spreading across VPS:
 ~/.clawdbot/workspace-farcaster1/
 
 # VPS 3: Builder team
-~/.clawdbot/workspace-forge/
+~/.clawdbot/workspace-builder1/
 ~/.clawdbot/workspace-integrator/
 ```
 
 Use shared intercom via mounted storage or sync scripts.
+
+---
+
+## Advanced Configuration
+
+### Session Memory
+
+Enable session memory so agents retain context across sessions:
+
+```json
+{
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}
+```
+
+### Context Management
+
+Control how agents manage their context window:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "1h"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    }
+  }
+}
+```
+
+### Health Checks
+
+```bash
+# Run diagnostics on your setup
+openclaw doctor
+
+# Check gateway health
+openclaw health
+```
 
 ---
 
@@ -1105,9 +1264,13 @@ Scale metrics with swarm size:
 
 ### Gateway won't start
 ```bash
-clawdbot gateway stop
+# Stop and force restart
+openclaw gateway stop
 kill -9 $(lsof -t -i:18789)
-clawdbot gateway &
+openclaw gateway
+
+# Or reinstall the service
+openclaw gateway install --force
 ```
 
 ### Agent not responding
@@ -1116,19 +1279,32 @@ clawdbot gateway &
 cat ~/.clawdbot/PAUSED
 
 # Check cron status
-clawdbot cron list
+openclaw cron list
 
 # Direct prompt
-clawdbot prompt myagent "Are you there? What's your status?"
+openclaw agent --agent myagent -m "Are you there? What's your status?"
+
+# Run health checks
+openclaw doctor
 ```
 
 ### Out of $TRUST
 Bridge more from Base: https://app.intuition.systems/bridge
 
 ### Discord not working
-- Verify bot token in config
+- Verify bot token in `config.json` under `channels.discord.token`
 - Check bot has permissions in channel
-- Ensure `--to "channel:ID"` format for cron delivery
+- Ensure bindings array has correct channel IDs
+- Restart gateway after config changes
+
+### Cron jobs not firing
+```bash
+# List all cron jobs and their status
+openclaw cron list
+
+# Check if gateway is running (cron requires it)
+openclaw health
+```
 
 ---
 
@@ -1136,12 +1312,18 @@ Bridge more from Base: https://app.intuition.systems/bridge
 
 | Command | What it does |
 |---------|--------------|
-| `clawdbot gateway &` | Start the gateway |
-| `clawdbot gateway stop` | Stop the gateway |
-| `clawdbot cron list` | List all cron jobs |
-| `clawdbot cron add ...` | Add a cron job |
-| `clawdbot cron delete [id]` | Delete a cron job |
-| `clawdbot prompt [agent] "msg"` | Send direct message |
+| `openclaw gateway` | Start the gateway |
+| `openclaw gateway install` | Install as system service |
+| `openclaw gateway stop` | Stop the gateway |
+| `openclaw configure` | Interactive setup wizard |
+| `openclaw agents list` | List configured agents |
+| `openclaw agents add --id <name>` | Add a new agent |
+| `openclaw cron list` | List all cron jobs |
+| `openclaw cron add ...` | Add a cron job |
+| `openclaw cron delete <id>` | Delete a cron job |
+| `openclaw agent --agent <id> -m "msg"` | Send direct message to agent |
+| `openclaw doctor` | Run health checks |
+| `openclaw health` | Check gateway status |
 | `touch ~/.clawdbot/PAUSED` | Pause all agents |
 | `rm ~/.clawdbot/PAUSED` | Resume agents |
 
@@ -1162,4 +1344,4 @@ Principles:
 
 ---
 
-*Created by the Intuition Agent Swarm. Last updated: 2026-02-01*
+*Created by the Intuition Agent Swarm. Last updated: 2026-02-17*
